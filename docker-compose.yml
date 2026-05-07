@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: fds-postgres
+    environment:
+      POSTGRES_USER: fds_user
+      POSTGRES_PASSWORD: fds_password
+      POSTGRES_DB: fds_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - fds_pg_data:/var/lib/postgresql/data
+
+volumes:
+  fds_pg_data:

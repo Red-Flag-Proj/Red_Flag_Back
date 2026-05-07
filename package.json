@@ -1,0 +1,39 @@
+{
+  "name": "fds-backend-node",
+  "version": "1.0.0",
+  "description": "Financial fraud detection backend using Node.js, Express, and PostgreSQL",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "db:init": "node src/db/init.js",
+    "db:seed:customers": "node src/db/seed-customers.js",
+    "test:rules": "node src/services/detection.service.test.js",
+    "test:actions": "node src/services/action.service.test.js",
+    "test:ars": "node src/services/ars.service.test.js",
+    "test:policy": "node src/services/policy.service.test.js",
+    "test:memo": "node src/services/memo-validation.service.test.js"
+  },
+  "keywords": [
+    "fds",
+    "fraud-detection",
+    "express",
+    "postgresql"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "pdfkit": "^0.15.2",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
