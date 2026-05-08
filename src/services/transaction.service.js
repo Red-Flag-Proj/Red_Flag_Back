@@ -14,6 +14,8 @@ const {
 const { buildPersonalBaseline } = require('./personal-baseline.service');
 const { HttpError } = require('../utils/http-error');
 const { maskTransactionRow } = require('./security.service');
+const { env } = require('../config/env');
+const { sendTwilioArsCall } = require('./twilio-ars.service');
 
 async function buildDetectionContext(client, subject, occurredAt, excludeTransactionId) {
   const subjectWhere = subject.customerRef
@@ -133,10 +135,26 @@ async function createDetectedTransaction(subject, payload) {
     });
     const responseActions = buildAutomaticResponseActions(updatedTransactionResult.rows[0], detection, responseDecision);
     const savedResponseActions = await addResponseActions(client, transaction.id, responseActions);
-    await createCallVerificationIfNeeded(client, updatedTransactionResult.rows[0], responseActions, detectionResult.rows[0]);
+    const callVerification = await createCallVerificationIfNeeded(client, updatedTransactionResult.rows[0], responseActions, detectionResult.rows[0]);
     await applyAutomaticSideEffects(client, updatedTransactionResult.rows[0], responseActions);
 
     await client.query('COMMIT');
+
+    // COMMIT 이후 비동기 발신 — 트랜잭션과 분리
+    if (callVerification && env.twilioEnabled) {
+      setImmediate(async () => {
+        try {
+          await sendTwilioArsCall({
+            env,
+            callVerificationId: callVerification.id,
+            to: callVerification.phone_number,
+          });
+        } catch (err) {
+          console.error('[ARS] Twilio call failed:', err.message);
+        }
+      });
+    }
+
     return {
       ...maskTransactionRow(updatedTransactionResult.rows[0]),
       detection: detectionResult.rows[0],

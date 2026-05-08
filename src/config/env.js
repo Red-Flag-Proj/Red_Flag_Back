@@ -6,7 +6,14 @@ const env = {
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  arsWebhookSecret: process.env.ARS_WEBHOOK_SECRET || ''
+  arsWebhookSecret: process.env.ARS_WEBHOOK_SECRET || '',
+  twilioEnabled: process.env.TWILIO_ENABLED === 'true',
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
+  twilioFromNumber: process.env.TWILIO_FROM_NUMBER || '',
+  publicBaseUrl: process.env.PUBLIC_BASE_URL || '',
+  twilioCallTimeoutSeconds: Number(process.env.TWILIO_CALL_TIMEOUT_SECONDS || 20),
+  twilioValidateSignature: process.env.TWILIO_VALIDATE_SIGNATURE === 'true'
 };
 
 module.exports = { env };

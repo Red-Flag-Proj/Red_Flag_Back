@@ -24,7 +24,7 @@ router.get('/fraud.pdf', async (req, res, next) => {
     const rows = await listReportRows();
     const pdf = await buildPdf(rows);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="fraud-report.pdf"');
+    res.setHeader('Content-Disposition', 'attachment; filename="fraud-report.pdf"; filename*=UTF-8\'\'fraud-report.pdf');
     res.send(pdf);
   } catch (err) {
     next(err);

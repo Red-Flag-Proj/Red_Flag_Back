@@ -68,8 +68,7 @@ function buildArsPrompt(transaction, detection, phoneNumber) {
   ].join(' ');
 }
 
-async function recordArsResponse(callVerificationId, payload, secret) {
-  verifyArsSecret(secret);
+async function applyArsDecision(callVerificationId, payload) {
   const result = normalizeArsResult(payload);
   const mapped = mapArsResult(result);
   const client = await pool.connect();
@@ -143,7 +142,13 @@ async function recordArsResponse(callVerificationId, payload, secret) {
   }
 }
 
+async function recordArsResponse(callVerificationId, payload, secret) {
+  verifyArsSecret(secret);
+  return applyArsDecision(callVerificationId, payload);
+}
+
 module.exports = {
+  applyArsDecision,
   buildArsPrompt,
   mapArsResult,
   normalizeArsResult,

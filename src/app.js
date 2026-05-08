@@ -8,6 +8,8 @@ const { transactionRoutes } = require('./routes/transaction.routes');
 const { adminRoutes } = require('./routes/admin.routes');
 const { reportRoutes } = require('./routes/report.routes');
 const { arsRoutes } = require('./routes/ars.routes');
+const { twilioArsRoutes } = require('./routes/twilio-ars.routes');
+const { validateTwilioSignature } = require('./middlewares/twilio-signature.middleware');
 const { errorMiddleware } = require('./middlewares/error.middleware');
 
 const app = express();
@@ -26,6 +28,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
+
+// Twilio webhook은 urlencoded body로 옴 — Twilio 라우트에만 적용
+app.use('/api/ars/twilio', express.urlencoded({ extended: false }));
+app.use('/api/ars/twilio', validateTwilioSignature(env), twilioArsRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'fds-backend-node' });
