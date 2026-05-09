@@ -48,23 +48,16 @@ function verifyArsSecret(secret) {
   }
 }
 
-function formatReason(reason) {
-  const score = Number(reason.score || 0);
-  return `${reason.code}${score ? ` +${score}` : ''}`;
-}
-
 function buildArsPrompt(transaction, detection, phoneNumber) {
-  const maskedPhone = maskPhoneNumber(phoneNumber);
-  const reasons = Array.isArray(detection.reasons) ? detection.reasons : [];
-  const reasonText = reasons.length
-    ? reasons.slice(0, 3).map(formatReason).join(', ')
-    : 'risk pattern detected';
+  const customerName = transaction.customer_name || transaction.customer_ref || '고객';
+  const amount = Number(transaction.amount).toLocaleString('ko-KR');
+  const riskScore = detection.risk_score;
 
   return [
-    `FDS anomaly alert for customer ${transaction.customer_ref || 'unknown'}.`,
-    `Risk score ${detection.risk_score}, reason: ${reasonText}.`,
-    `Amount KRW ${Number(transaction.amount).toLocaleString('ko-KR')}, method ${transaction.payment_method || transaction.type}.`,
-    `Phone ${maskedPhone}. If this transaction is yours, press 1. If not, press 2.`
+    `RedFlag 이상거래 탐지 ARS 서비스입니다.`,
+    `${customerName} 고객님 계정에서 이상거래가 감지되었습니다.`,
+    `거래 금액 ${amount}원, 위험 점수 ${riskScore}점입니다.`,
+    `본인이 요청한 거래가 맞으시면 1번, 아니면 2번을 눌러주세요.`
   ].join(' ');
 }
 
