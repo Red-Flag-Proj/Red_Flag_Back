@@ -1,8 +1,7 @@
 const { pool } = require('../db/pool');
-const { calculateRisk } = require('./detection.service');
+const { detectTransactionWithFraudGuard } = require('./fraudguard.service');
 const { decideInitialResponse } = require('./response-policy.service');
 const { addActionLog, listActionLogs } = require('./action.service');
-const { getEnabledPolicyCodes } = require('./policy.service');
 const {
   buildAutomaticResponseActions,
   addResponseActions,
@@ -11,50 +10,31 @@ const {
   listCallVerifications,
   listResponseActions
 } = require('./response-action.service');
-const { buildPersonalBaseline } = require('./personal-baseline.service');
 const { HttpError } = require('../utils/http-error');
 const { maskTransactionRow } = require('./security.service');
 const { env } = require('../config/env');
 const { sendTwilioArsCall } = require('./twilio-ars.service');
 
-async function buildDetectionContext(client, subject, occurredAt, excludeTransactionId) {
+async function buildFraudGuardHistory(client, subject, excludeTransactionId) {
   const subjectWhere = subject.customerRef
-    ? 'customer_ref = $1'
-    : 'user_id = $1';
+    ? 't.customer_ref = $1'
+    : 't.user_id = $1';
   const subjectValue = subject.customerRef || subject.userId;
-  const baseWhere = `${subjectWhere} AND id <> $3`;
-  const baseWhereNoDate = `${subjectWhere} AND id <> $2`;
 
-  const avgResult = await client.query(
-    `SELECT COALESCE(AVG(amount), 0) AS average_amount
-     FROM transactions
-     WHERE ${baseWhere} AND occurred_at >= $2::timestamptz - INTERVAL '7 days'`,
-    [subjectValue, occurredAt, excludeTransactionId]
-  );
-  const recentResult = await client.query(
-    `SELECT occurred_at
-     FROM transactions
-     WHERE ${baseWhere} AND occurred_at >= $2::timestamptz - INTERVAL '1 hour'`,
-    [subjectValue, occurredAt, excludeTransactionId]
-  );
-  const deviceResult = await client.query(
-    `SELECT DISTINCT device_id FROM transactions WHERE ${baseWhereNoDate} AND device_id IS NOT NULL`,
+  const result = await client.query(
+    `SELECT t.*
+     FROM transactions t
+     LEFT JOIN detection_results d ON d.transaction_id = t.id
+     WHERE ${subjectWhere}
+       AND t.id <> $2
+       AND t.status = 'APPROVED'
+       AND (d.risk_level IS NULL OR d.risk_level = 'NORMAL')
+     ORDER BY t.occurred_at DESC
+     LIMIT 50`,
     [subjectValue, excludeTransactionId]
   );
-  const methodResult = await client.query(
-    `SELECT DISTINCT payment_method FROM transactions WHERE ${baseWhereNoDate} AND payment_method IS NOT NULL`,
-    [subjectValue, excludeTransactionId]
-  );
-  const enabledRuleCodes = await getEnabledPolicyCodes(client);
 
-  return {
-    averageAmount: Number(avgResult.rows[0].average_amount),
-    recentTransactions: recentResult.rows,
-    knownDevices: deviceResult.rows.map((row) => row.device_id),
-    knownPaymentMethods: methodResult.rows.map((row) => row.payment_method),
-    failedLoginWithinOneHour: false,
-    enabledRuleCodes
-  };
+  return result.rows;
 }
 
 async function createDetectedTransaction(subject, payload) {
@@ -63,13 +43,14 @@ async function createDetectedTransaction(subject, payload) {
     await client.query('BEGIN');
 
     if (subject.customerRef) {
+      const hasAuthoritativeCustomerName = Boolean(subject.customerName);
       await client.query(
         `INSERT INTO customers (customer_ref, name, phone_number)
          VALUES ($1, $2, $3)
          ON CONFLICT (customer_ref) DO UPDATE SET
-           name = COALESCE(EXCLUDED.name, customers.name),
+           name = CASE WHEN $4 THEN EXCLUDED.name ELSE customers.name END,
            phone_number = COALESCE(EXCLUDED.phone_number, customers.phone_number)`,
-        [subject.customerRef, subject.customerName || subject.customerRef, payload.phoneNumber || null]
+        [subject.customerRef, subject.customerName || 'Unknown Customer', payload.phoneNumber || null, hasAuthoritativeCustomerName]
       );
       await client.query(
         `INSERT INTO customer_cards (customer_ref, card_token, status)
@@ -104,16 +85,29 @@ async function createDetectedTransaction(subject, payload) {
     );
 
     const transaction = transactionResult.rows[0];
-    const context = await buildDetectionContext(client, subject, transaction.occurred_at, transaction.id);
-    context.personalBaseline = await buildPersonalBaseline(client, transaction);
-    const detection = calculateRisk(transaction, context);
+    const fraudGuardHistory = await buildFraudGuardHistory(client, subject, transaction.id);
+    const detection = await detectTransactionWithFraudGuard(transaction, fraudGuardHistory, subject);
     const responseDecision = decideInitialResponse(detection.riskLevel, detection.riskScore);
 
     const detectionResult = await client.query(
-      `INSERT INTO detection_results (transaction_id, rule_score, personal_score, risk_score, risk_level, reasons)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO detection_results
+       (transaction_id, rule_score, personal_score, risk_score, risk_level, reasons, recommended_action, triggered_rules, score_breakdown, model_info, ars_policy, raw_risk_level)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [transaction.id, detection.ruleScore, detection.personalScore, detection.riskScore, detection.riskLevel, JSON.stringify(detection.reasons)]
+      [
+        transaction.id,
+        detection.ruleScore,
+        detection.personalScore,
+        detection.riskScore,
+        detection.riskLevel,
+        JSON.stringify(detection.reasons),
+        detection.recommendedAction,
+        JSON.stringify(detection.triggeredRules),
+        JSON.stringify(detection.scoreBreakdown || {}),
+        JSON.stringify(detection.modelInfo || {}),
+        JSON.stringify(detection.arsPolicy || {}),
+        detection.rawRiskLevel
+      ]
     );
 
     const updatedTransactionResult = await client.query(
@@ -182,7 +176,8 @@ async function createCustomerTransaction(payload) {
 
 async function listUserTransactions(userId) {
   const result = await pool.query(
-    `SELECT t.*, d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons
+    `SELECT t.*, d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons,
+            d.recommended_action, d.triggered_rules, d.score_breakdown, d.model_info, d.ars_policy, d.raw_risk_level
      FROM transactions t
      JOIN detection_results d ON d.transaction_id = t.id
      WHERE t.user_id = $1
@@ -197,7 +192,8 @@ async function getTransactionDetail(id, user) {
   const where = user.role === 'ADMIN' ? 't.id = $1' : 't.id = $1 AND t.user_id = $2';
 
   const result = await pool.query(
-    `SELECT t.*, u.email, u.username, d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons
+    `SELECT t.*, u.email, u.username, d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons,
+            d.recommended_action, d.triggered_rules, d.score_breakdown, d.model_info, d.ars_policy, d.raw_risk_level
      FROM transactions t
      LEFT JOIN users u ON u.id = t.user_id
      JOIN detection_results d ON d.transaction_id = t.id

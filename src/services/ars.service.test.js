@@ -25,12 +25,17 @@ const prompt = buildArsPrompt(
     risk_score: 70,
     reasons: [{ code: 'HIGH_AMOUNT', score: 30 }, { code: 'NEW_DEVICE', score: 20 }]
   },
-  '010-1234-5678'
+  {
+    displayName: 'Kim Minjun',
+    phoneNumber: '010-1234-5678'
+  }
 );
 
-assert.ok(prompt.includes('1번'));
-assert.ok(prompt.includes('2번'));
-assert.ok(prompt.includes('1,500,000원'));
+assert.ok(prompt.includes('Kim Minjun'));
+assert.ok(!prompt.includes('CUST-001'));
+assert.ok(prompt.includes('press 1'));
+assert.ok(prompt.includes('press 2'));
+assert.ok(prompt.includes('010-****-5678'));
 assert.ok(!prompt.includes('010-1234-5678'));
 
 console.log('ARS service test passed.');

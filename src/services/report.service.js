@@ -1,4 +1,4 @@
-const PDFDocument = require('pdfkit');
+﻿const PDFDocument = require('pdfkit');
 const fs = require('fs');
 
 const fontCandidates = [
@@ -47,9 +47,9 @@ function formatAmount(value) {
 
 function riskStyle(level) {
   const styles = {
-    NORMAL: { background: '#E8F6EF', foreground: '#147A46', label: '정상' },
-    SUSPICIOUS: { background: '#FFF4D8', foreground: '#9A5B00', label: '의심' },
-    DANGER: { background: '#FFE5E5', foreground: '#B42318', label: '위험' }
+    NORMAL: { background: '#E8F6EF', foreground: '#147A46', label: '?뺤긽' },
+    SUSPICIOUS: { background: '#FFF4D8', foreground: '#9A5B00', label: '?섏떖' },
+    DANGER: { background: '#FFE5E5', foreground: '#B42318', label: '?꾪뿕' }
   };
   return styles[level] || { background: '#EEF2F6', foreground: '#344054', label: level || '-' };
 }
@@ -57,7 +57,7 @@ function riskStyle(level) {
 function normalizeReasons(reasons) {
   if (!reasons) return '-';
   if (Array.isArray(reasons)) {
-    return reasons.map((item) => item.label || item.code).filter(Boolean).join(' · ') || '-';
+    return reasons.map((item) => item.label || item.code).filter(Boolean).join(' 쨌 ') || '-';
   }
   if (typeof reasons === 'string') {
     try {
@@ -93,7 +93,9 @@ function buildCsv(rows) {
     'decided_action',
     'risk_score',
     'risk_level',
-    'reasons'
+    'reasons',
+    'recommended_action',
+    'triggered_rules'
   ];
 
   const lines = rows.map((row) => headers.map((key) => csvEscape(row[key])).join(','));
@@ -120,16 +122,16 @@ function buildPdf(rows) {
   doc.rect(0, 0, doc.page.width, 126).fill('#172033');
   doc.fillColor('#FFFFFF').fontSize(22).text('Fraud Detection Report', contentX, 34);
   doc.fillColor('#C8D2E0').fontSize(9).text(`Generated at ${formatReportDate(new Date())}`, contentX, 66);
-  doc.fillColor('#DDE6F3').fontSize(10).text('거래 위험도 분석 리포트', contentX, 88);
+  doc.fillColor('#DDE6F3').fontSize(10).text('Transaction risk analysis report', contentX, 88);
 
   const cardGap = 10;
   const cardWidth = (contentWidth - cardGap * 3) / 4;
   const cardY = 148;
   const cards = [
-    { label: '전체 거래', value: summary.total, background: '#F3F6FA', foreground: '#172033' },
-    { label: '정상', value: summary.NORMAL, background: riskStyle('NORMAL').background, foreground: riskStyle('NORMAL').foreground },
-    { label: '의심', value: summary.SUSPICIOUS, background: riskStyle('SUSPICIOUS').background, foreground: riskStyle('SUSPICIOUS').foreground },
-    { label: '위험', value: summary.DANGER, background: riskStyle('DANGER').background, foreground: riskStyle('DANGER').foreground }
+    { label: '?꾩껜 嫄곕옒', value: summary.total, background: '#F3F6FA', foreground: '#172033' },
+    { label: '?뺤긽', value: summary.NORMAL, background: riskStyle('NORMAL').background, foreground: riskStyle('NORMAL').foreground },
+    { label: '?섏떖', value: summary.SUSPICIOUS, background: riskStyle('SUSPICIOUS').background, foreground: riskStyle('SUSPICIOUS').foreground },
+    { label: '?꾪뿕', value: summary.DANGER, background: riskStyle('DANGER').background, foreground: riskStyle('DANGER').foreground }
   ];
 
   cards.forEach((card, index) => {
@@ -139,8 +141,8 @@ function buildPdf(rows) {
     doc.fillColor(card.foreground).fontSize(20).text(String(card.value), x + 12, cardY + 27, { width: cardWidth - 24 });
   });
 
-  doc.fillColor('#172033').fontSize(13).text('거래 목록', contentX, 232);
-  doc.fillColor('#667085').fontSize(8).text('최대 40건까지 최신순으로 표시됩니다.', contentX, 250);
+  doc.fillColor('#172033').fontSize(13).text('嫄곕옒 紐⑸줉', contentX, 232);
+  doc.fillColor('#667085').fontSize(8).text('理쒕? 40嫄닿퉴吏 理쒖떊?쒖쑝濡??쒖떆?⑸땲??', contentX, 250);
 
   let y = 274;
 
@@ -154,7 +156,7 @@ function buildPdf(rows) {
     if (y + rowHeight > bottomY) {
       doc.addPage();
       y = doc.page.margins.top;
-      doc.fillColor('#172033').fontSize(13).text('거래 목록', contentX, y);
+      doc.fillColor('#172033').fontSize(13).text('嫄곕옒 紐⑸줉', contentX, y);
       y += 28;
     }
 
@@ -170,10 +172,10 @@ function buildPdf(rows) {
       align: 'right'
     });
 
-    doc.fillColor('#667085').fontSize(8).text(`${row.type || '-'} · ${row.payment_method || '-'} · ${row.status || '-'}`, contentX + 14, y + 34, {
+    doc.fillColor('#667085').fontSize(8).text(`${row.type || '-'} 쨌 ${row.payment_method || '-'} 쨌 ${row.status || '-'}`, contentX + 14, y + 34, {
       width: contentWidth - 28
     });
-    doc.text(`${formatReportDate(row.occurred_at)} · ${row.country_code || '-'} ${row.city || ''}`.trim(), contentX + 14, y + 48, {
+    doc.text(`${formatReportDate(row.occurred_at)} 쨌 ${row.country_code || '-'} ${row.city || ''}`.trim(), contentX + 14, y + 48, {
       width: contentWidth - 28
     });
 
@@ -184,7 +186,7 @@ function buildPdf(rows) {
       align: 'center'
     });
 
-    doc.fillColor('#344054').fontSize(8).text('탐지 사유', contentX + 14, y + 68);
+    doc.fillColor('#344054').fontSize(8).text('?먯? ?ъ쑀', contentX + 14, y + 68);
     doc.fillColor('#475467').fontSize(8).text(reasons, contentX + 14, y + 82, {
       width: contentWidth - 28,
       lineGap: 2

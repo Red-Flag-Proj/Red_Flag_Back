@@ -70,6 +70,12 @@ CREATE TABLE IF NOT EXISTS detection_results (
   risk_score INTEGER NOT NULL,
   risk_level VARCHAR(20) NOT NULL CHECK (risk_level IN ('NORMAL', 'SUSPICIOUS', 'DANGER')),
   reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recommended_action TEXT,
+  triggered_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+  score_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb,
+  model_info JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ars_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+  raw_risk_level VARCHAR(40),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -144,7 +150,13 @@ ALTER TABLE transactions
 
 ALTER TABLE detection_results
   ADD COLUMN IF NOT EXISTS rule_score INTEGER NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS personal_score INTEGER NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS personal_score INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS recommended_action TEXT,
+  ADD COLUMN IF NOT EXISTS triggered_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS score_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS model_info JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS ars_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS raw_risk_level VARCHAR(40);
 
 ALTER TABLE call_verifications
   ADD COLUMN IF NOT EXISTS masked_phone_number VARCHAR(40),

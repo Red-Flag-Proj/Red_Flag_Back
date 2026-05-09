@@ -125,11 +125,14 @@ async function createCallVerificationIfNeeded(client, transaction, actions, dete
   if (!shouldCall) return null;
 
   const customerResult = transaction.customer_ref
-    ? await client.query('SELECT phone_number FROM customers WHERE customer_ref = $1', [transaction.customer_ref])
+    ? await client.query('SELECT name AS display_name, phone_number FROM customers WHERE customer_ref = $1', [transaction.customer_ref])
     : { rows: [] };
 
   const phoneNumber = customerResult.rows[0]?.phone_number || null;
-  const arsPrompt = buildArsPrompt(transaction, detection, phoneNumber);
+  const arsPrompt = buildArsPrompt(transaction, detection, {
+    displayName: customerResult.rows[0]?.display_name || null,
+    phoneNumber
+  });
   const result = await client.query(
     `INSERT INTO call_verifications
      (transaction_id, customer_ref, phone_number, masked_phone_number, call_status, memo, ars_prompt)

@@ -59,7 +59,8 @@ async function listSuspiciousTransactions() {
   const result = await pool.query(
     `SELECT t.id, t.amount, t.type, t.occurred_at, t.country_code, t.city,
             t.status, t.decided_action, t.customer_ref, t.customer_name,
-            u.email, u.username, d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons
+            u.email, u.username, d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons,
+            d.recommended_action, d.triggered_rules, d.score_breakdown, d.model_info, d.ars_policy, d.raw_risk_level
      FROM transactions t
      LEFT JOIN users u ON u.id = t.user_id
      JOIN detection_results d ON d.transaction_id = t.id
@@ -75,7 +76,8 @@ async function listReportRows() {
             t.customer_ref, t.customer_name, t.type, t.amount, t.occurred_at, t.country_code,
             t.city, t.ip_address::text, t.device_id, t.payment_method,
             t.status, t.decided_action,
-            d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons
+            d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons,
+            d.recommended_action, d.triggered_rules, d.score_breakdown, d.model_info, d.ars_policy, d.raw_risk_level
      FROM transactions t
      LEFT JOIN users u ON u.id = t.user_id
      JOIN detection_results d ON d.transaction_id = t.id
