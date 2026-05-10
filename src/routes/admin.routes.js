@@ -49,7 +49,7 @@ router.post('/transactions', async (req, res, next) => {
 
 router.get('/stats', async (req, res, next) => {
   try {
-    const stats = await getStats();
+    const stats = await getStats(req.query.source);
     res.json({ stats });
   } catch (err) {
     next(err);
@@ -86,7 +86,7 @@ router.get('/policy-rule-logs', async (req, res, next) => {
 
 router.get('/suspicious-transactions', async (req, res, next) => {
   try {
-    const transactions = await listSuspiciousTransactions();
+    const transactions = await listSuspiciousTransactions(req.query.source, req.query.risk);
     res.json({ transactions });
   } catch (err) {
     next(err);

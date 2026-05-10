@@ -35,7 +35,33 @@ async function createFakeTransactions(count = 20) {
   return created;
 }
 
-async function getStats() {
+function buildSourceFilter(source) {
+  if (source === 'api-demo') {
+    return {
+      whereSql: "WHERE t.customer_ref LIKE 'DEMO-CUST-%'",
+      values: []
+    };
+  }
+
+  if (source === 'ai-generated') {
+    return {
+      whereSql: "WHERE t.customer_ref LIKE 'SIM-CUST-%'",
+      values: []
+    };
+  }
+
+  if (source === 'ai-import') {
+    return {
+      whereSql: "WHERE t.customer_ref LIKE 'CUST\\_%' ESCAPE '\\'",
+      values: []
+    };
+  }
+
+  return { whereSql: '', values: [] };
+}
+
+async function getStats(source) {
+  const filter = buildSourceFilter(source);
   const result = await pool.query(
     `SELECT
        COUNT(*)::int AS total_transactions,
@@ -50,22 +76,34 @@ async function getStats() {
        COUNT(*) FILTER (WHERE t.status = 'BLOCKED')::int AS blocked_count,
        COALESCE(AVG(d.risk_score), 0)::numeric(10,2) AS average_risk_score
      FROM transactions t
-     JOIN detection_results d ON d.transaction_id = t.id`
+     JOIN detection_results d ON d.transaction_id = t.id
+     ${filter.whereSql}`,
+    filter.values
   );
   return result.rows[0];
 }
 
-async function listSuspiciousTransactions() {
+async function listSuspiciousTransactions(source, risk = 'suspicious') {
+  const filter = buildSourceFilter(source);
+  const conditions = [];
+  if (filter.whereSql) {
+    conditions.push(filter.whereSql.replace(/^WHERE\s+/i, ''));
+  }
+  if (risk !== 'all') {
+    conditions.push("d.risk_level != 'NORMAL'");
+  }
+  const whereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const result = await pool.query(
-    `SELECT t.id, t.amount, t.type, t.occurred_at, t.country_code, t.city,
+    `SELECT t.id, t.amount, t.type, t.occurred_at, t.created_at, t.country_code, t.city,
             t.status, t.decided_action, t.customer_ref, t.customer_name,
             u.email, u.username, d.rule_score, d.personal_score, d.risk_score, d.risk_level, d.reasons,
             d.recommended_action, d.triggered_rules, d.score_breakdown, d.model_info, d.ars_policy, d.raw_risk_level
      FROM transactions t
      LEFT JOIN users u ON u.id = t.user_id
      JOIN detection_results d ON d.transaction_id = t.id
-     WHERE d.risk_level != 'NORMAL'
-     ORDER BY d.risk_score DESC, t.occurred_at DESC`
+     ${whereSql}
+     ORDER BY ${risk === 'all' ? 't.created_at DESC, d.risk_score DESC' : 'd.risk_score DESC, t.created_at DESC'}`,
+    filter.values
   );
   return result.rows.map(maskTransactionRow);
 }
@@ -81,7 +119,7 @@ async function listReportRows() {
      FROM transactions t
      LEFT JOIN users u ON u.id = t.user_id
      JOIN detection_results d ON d.transaction_id = t.id
-     ORDER BY t.occurred_at DESC`
+     ORDER BY t.created_at DESC`
   );
   return result.rows.map(maskTransactionRow);
 }
