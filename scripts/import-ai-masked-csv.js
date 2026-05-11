@@ -3,7 +3,7 @@ const path = require('path');
 const { pool } = require('../src/db/pool');
 
 const API_BASE_URL = process.env.FDS_API_BASE_URL || 'http://localhost:4000';
-const DEFAULT_CSV_PATH = path.join('C:', 'Users', 'USER', 'Desktop', 'FraudGuard-main', 'AI Engine', 'data', 'db_test_transactions_200_masked.csv');
+const DEFAULT_CSV_PATH = path.join('C:', 'Users', 'USER', 'Desktop', 'FraudGuard-main', 'AI Engine', 'data', 'db_test_transactions_400_masked.csv');
 const LOGIN_PAYLOAD = {
   emailOrUsername: process.env.FDS_ADMIN_EMAIL || 'admin@fds.local',
   password: process.env.FDS_ADMIN_PASSWORD || 'Admin1234!'
