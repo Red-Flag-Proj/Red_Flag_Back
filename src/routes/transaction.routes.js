@@ -1,7 +1,12 @@
 const express = require('express');
 const { z } = require('zod');
 const { authRequired } = require('../middlewares/auth.middleware');
-const { createTransaction, listUserTransactions, getTransactionDetail } = require('../services/transaction.service');
+const {
+  createTransaction,
+  listUserTransactions,
+  getTransactionDetail,
+  requestManualArsCall
+} = require('../services/transaction.service');
 
 const router = express.Router();
 
@@ -35,6 +40,15 @@ router.post('/', async (req, res, next) => {
     const body = transactionSchema.parse(req.body);
     const transaction = await createTransaction(req.user.id, body);
     res.status(201).json({ transaction });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/ars-call', async (req, res, next) => {
+  try {
+    const result = await requestManualArsCall(req.params.id, req.user);
+    res.status(result.skipped ? 200 : 201).json(result);
   } catch (err) {
     next(err);
   }

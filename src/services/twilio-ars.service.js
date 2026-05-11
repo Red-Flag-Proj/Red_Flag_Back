@@ -58,6 +58,14 @@ async function sendTwilioArsCall({ env, callVerificationId, to }) {
       throw new HttpError(404, 'Call verification not found.');
     }
 
+    await pool.query(
+      `UPDATE transactions
+       SET status = 'CALL_IN_PROGRESS'
+       WHERE id = $1
+         AND status NOT IN ('APPROVED', 'BLOCKED', 'CARD_SUSPENDED')`,
+      [result.rows[0].transaction_id]
+    );
+
     return result.rows[0];
   } catch (err) {
     await pool.query(

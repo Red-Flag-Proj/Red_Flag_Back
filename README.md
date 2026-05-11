@@ -44,7 +44,11 @@ npm run dev
 - `APPROVED`
 - `PENDING_REVIEW`
 - `REQUIRES_AUTH`
+- `CALL_REQUIRED`
+- `CALL_IN_PROGRESS`
+- `CALL_CONFIRMED`
 - `BLOCKED`
+- `CARD_SUSPENDED`
 
 ## Admin Actions
 
@@ -78,6 +82,7 @@ Stored audit action values:
 - `GET /api/transactions`
 - `POST /api/transactions`
 - `GET /api/transactions/:id`
+- `POST /api/transactions/:id/ars-call`
 
 ### Admin
 
@@ -107,3 +112,31 @@ Admin action body:
 npm run test:rules
 npm run test:actions
 ```
+
+## Manual ARS Call Verification
+
+`POST /api/transactions/:id/ars-call` manually starts a Twilio ARS call for a transaction that is waiting in `CALL_REQUIRED`. It uses the existing Twilio ARS sender and does not create a second call when the latest call verification is already `CALL_IN_PROGRESS`.
+
+Required `.env` values for a real call:
+
+```bash
+TWILIO_ENABLED=true
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_FROM_NUMBER=+15017122661
+PUBLIC_BASE_URL=https://xxxx.ngrok-free.app
+```
+
+Manual check:
+
+```bash
+curl -X POST http://localhost:4000/api/transactions/<transaction-id>/ars-call \
+  -H "Authorization: Bearer <admin-or-owner-token>"
+```
+
+Expected results:
+
+- `CALL_REQUIRED`: returns `201` with `transactionId`, `callVerificationId`, `callStatus`, `twilioCallSid`, and `providerStatus`.
+- `CALL_IN_PROGRESS`: returns `200` with `skipped: true` and does not create a new Twilio call.
+- `APPROVED`, `CALL_CONFIRMED`, `BLOCKED`, or `CARD_SUSPENDED`: returns `200` with `skipped: true`.
+- `TWILIO_ENABLED=false`: returns `503` when a new call would otherwise be started.

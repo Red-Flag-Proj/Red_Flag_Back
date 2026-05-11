@@ -106,10 +106,21 @@ CREATE TABLE IF NOT EXISTS call_verifications (
   transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   customer_ref VARCHAR(80),
   phone_number VARCHAR(40),
+  provider VARCHAR(20),
+  twilio_call_sid VARCHAR(64),
   call_status VARCHAR(30) NOT NULL DEFAULT 'CALL_REQUIRED',
   masked_phone_number VARCHAR(40),
   ars_prompt TEXT,
   ars_result VARCHAR(30),
+  selected_digit VARCHAR(4),
+  raw_payload JSONB,
+  provider_response JSONB,
+  last_provider_status VARCHAR(32),
+  requested_at TIMESTAMPTZ,
+  answered_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  last_error_code VARCHAR(32),
+  last_error_message TEXT,
   memo TEXT,
   verified_by UUID REFERENCES users(id) ON DELETE SET NULL,
   verified_at TIMESTAMPTZ,
@@ -161,7 +172,18 @@ ALTER TABLE detection_results
 ALTER TABLE call_verifications
   ADD COLUMN IF NOT EXISTS masked_phone_number VARCHAR(40),
   ADD COLUMN IF NOT EXISTS ars_prompt TEXT,
-  ADD COLUMN IF NOT EXISTS ars_result VARCHAR(30);
+  ADD COLUMN IF NOT EXISTS ars_result VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS provider VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS twilio_call_sid VARCHAR(64),
+  ADD COLUMN IF NOT EXISTS selected_digit VARCHAR(4),
+  ADD COLUMN IF NOT EXISTS raw_payload JSONB,
+  ADD COLUMN IF NOT EXISTS provider_response JSONB,
+  ADD COLUMN IF NOT EXISTS last_provider_status VARCHAR(32),
+  ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_error_code VARCHAR(32),
+  ADD COLUMN IF NOT EXISTS last_error_message TEXT;
 
 ALTER TABLE transactions
   ALTER COLUMN user_id DROP NOT NULL;
@@ -279,5 +301,8 @@ CREATE INDEX IF NOT EXISTS idx_detection_level ON detection_results(risk_level, 
 CREATE INDEX IF NOT EXISTS idx_action_logs_transaction_time ON action_logs(transaction_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_response_actions_transaction_time ON response_actions(transaction_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_call_verifications_transaction ON call_verifications(transaction_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_call_verifications_twilio_call_sid
+  ON call_verifications (twilio_call_sid)
+  WHERE twilio_call_sid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_policy_rules_enabled ON policy_rules(enabled, deployment_status);
 CREATE INDEX IF NOT EXISTS idx_policy_rule_logs_rule_time ON policy_rule_logs(rule_id, created_at DESC);

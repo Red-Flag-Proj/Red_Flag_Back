@@ -16,7 +16,8 @@
     "test:actions": "node src/services/action.service.test.js",
     "test:ars": "node src/services/ars.service.test.js",
     "test:policy": "node src/services/policy.service.test.js",
-    "test:memo": "node src/services/memo-validation.service.test.js"
+    "test:memo": "node src/services/memo-validation.service.test.js",
+    "test:report": "node src/services/report.service.test.js"
   },
   "keywords": [
     "fds",

@@ -11,9 +11,75 @@ const {
   listResponseActions
 } = require('./response-action.service');
 const { HttpError } = require('../utils/http-error');
-const { maskTransactionRow } = require('./security.service');
+const { maskPhoneNumber, maskTransactionRow } = require('./security.service');
 const { env } = require('../config/env');
 const { sendTwilioArsCall } = require('./twilio-ars.service');
+const { buildArsPrompt } = require('./ars.service');
+
+const COMPLETED_ARS_TRANSACTION_STATUSES = new Set(['CALL_CONFIRMED', 'APPROVED']);
+const BLOCKED_ARS_TRANSACTION_STATUSES = new Set(['BLOCKED', 'CARD_SUSPENDED']);
+const RETRYABLE_CALL_STATUSES = new Set(['CALL_NO_RESPONSE', 'CALL_HOLD']);
+
+function buildArsCallResponse({ transactionId, callVerification, message, skipped = false }) {
+  const providerResponse = callVerification?.provider_response || {};
+  return {
+    transactionId,
+    callVerificationId: callVerification?.id || null,
+    callStatus: callVerification?.call_status || null,
+    twilioCallSid: callVerification?.twilio_call_sid || null,
+    providerStatus: callVerification?.last_provider_status || providerResponse.status || null,
+    skipped,
+    message
+  };
+}
+
+function buildManualArsPrompt(current) {
+  return buildArsPrompt(current, {
+    risk_score: current.risk_score,
+    reasons: current.reasons || []
+  }, {
+    displayName: current.customer_display_name || current.customer_name || null,
+    phoneNumber: current.customer_phone_number || null
+  });
+}
+
+async function createManualCallVerification(client, current) {
+  const arsPrompt = buildManualArsPrompt(current);
+  const result = await client.query(
+    `INSERT INTO call_verifications
+     (transaction_id, customer_ref, phone_number, masked_phone_number, call_status, memo, ars_prompt)
+     VALUES ($1, $2, $3, $4, 'CALL_IN_PROGRESS', $5, $6)
+     RETURNING *`,
+    [
+      current.id,
+      current.customer_ref || null,
+      current.customer_phone_number || null,
+      maskPhoneNumber(current.customer_phone_number),
+      arsPrompt,
+      arsPrompt
+    ]
+  );
+
+  return result.rows[0];
+}
+
+async function reserveManualCallVerification(client, current, latestCallVerification) {
+  if (!latestCallVerification || RETRYABLE_CALL_STATUSES.has(latestCallVerification.call_status)) {
+    return createManualCallVerification(client, current);
+  }
+
+  const result = await client.query(
+    `UPDATE call_verifications
+     SET call_status = 'CALL_IN_PROGRESS',
+         last_error_code = NULL,
+         last_error_message = NULL
+     WHERE id = $1
+     RETURNING *`,
+    [latestCallVerification.id]
+  );
+
+  return result.rows[0];
+}
 
 async function buildFraudGuardHistory(client, subject, excludeTransactionId) {
   const subjectWhere = subject.customerRef
@@ -213,4 +279,108 @@ async function getTransactionDetail(id, user) {
   return { ...maskTransactionRow(transaction), action_logs: actionLogs, response_actions: responseActions, call_verifications: callVerifications };
 }
 
-module.exports = { createTransaction, createCustomerTransaction, listUserTransactions, getTransactionDetail };
+async function requestManualArsCall(transactionId, user) {
+  const values = user.role === 'ADMIN' ? [transactionId] : [transactionId, user.id];
+  const where = user.role === 'ADMIN' ? 't.id = $1' : 't.id = $1 AND t.user_id = $2';
+  const client = await pool.connect();
+  let reservedCallVerification;
+
+  try {
+    await client.query('BEGIN');
+
+    const currentResult = await client.query(
+      `SELECT t.*, d.risk_score, d.risk_level, d.reasons,
+              c.name AS customer_display_name,
+              c.phone_number AS customer_phone_number
+       FROM transactions t
+       JOIN detection_results d ON d.transaction_id = t.id
+       LEFT JOIN customers c ON c.customer_ref = t.customer_ref
+       WHERE ${where}
+       FOR UPDATE OF t`,
+      values
+    );
+
+    if (currentResult.rowCount === 0) {
+      throw new HttpError(404, 'Transaction not found.');
+    }
+
+    const current = currentResult.rows[0];
+    const latestCallResult = await client.query(
+      `SELECT *
+       FROM call_verifications
+       WHERE transaction_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [transactionId]
+    );
+    const latestCallVerification = latestCallResult.rows[0] || null;
+
+    if (COMPLETED_ARS_TRANSACTION_STATUSES.has(current.status) || latestCallVerification?.call_status === 'CALL_CONFIRMED') {
+      await client.query('COMMIT');
+      return buildArsCallResponse({
+        transactionId,
+        callVerification: latestCallVerification,
+        skipped: true,
+        message: '이미 고객 확인/승인 완료된 거래입니다.'
+      });
+    }
+
+    if (BLOCKED_ARS_TRANSACTION_STATUSES.has(current.status) || latestCallVerification?.call_status === 'CALL_DENIED') {
+      await client.query('COMMIT');
+      return buildArsCallResponse({
+        transactionId,
+        callVerification: latestCallVerification,
+        skipped: true,
+        message: '이미 차단/정지 처리된 거래입니다.'
+      });
+    }
+
+    const canRetry = latestCallVerification && RETRYABLE_CALL_STATUSES.has(latestCallVerification.call_status);
+    if (!canRetry && (current.status === 'CALL_IN_PROGRESS' || latestCallVerification?.call_status === 'CALL_IN_PROGRESS')) {
+      await client.query('COMMIT');
+      return buildArsCallResponse({
+        transactionId,
+        callVerification: latestCallVerification,
+        skipped: true,
+        message: '이미 ARS 진행 중입니다.'
+      });
+    }
+
+    if (!canRetry && current.status !== 'CALL_REQUIRED') {
+      throw new HttpError(409, 'ARS 발신 대상 상태가 아닙니다.');
+    }
+
+    if (!env.twilioEnabled) {
+      throw new HttpError(503, 'Twilio ARS 발신이 비활성화되어 있습니다.');
+    }
+
+    reservedCallVerification = await reserveManualCallVerification(client, current, latestCallVerification);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const sentCallVerification = await sendTwilioArsCall({
+    env,
+    callVerificationId: reservedCallVerification.id,
+    to: reservedCallVerification.phone_number
+  });
+
+  return buildArsCallResponse({
+    transactionId,
+    callVerification: sentCallVerification,
+    message: 'ARS 발신 요청이 생성되었습니다.'
+  });
+}
+
+module.exports = {
+  createTransaction,
+  createCustomerTransaction,
+  listUserTransactions,
+  getTransactionDetail,
+  requestManualArsCall
+};
