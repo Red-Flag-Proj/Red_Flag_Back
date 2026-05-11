@@ -17,24 +17,30 @@ assert.strictEqual(mapArsResult('NO_RESPONSE').status, 'PENDING_REVIEW');
 const prompt = buildArsPrompt(
   {
     customer_ref: 'CUST-001',
+    customer_name: '김민준',
     amount: 1500000,
     payment_method: 'CARD',
-    type: 'PAYMENT'
+    type: 'PAYMENT',
+    merchant_category: 'ONLINE'
   },
   {
     risk_score: 70,
     reasons: [{ code: 'HIGH_AMOUNT', score: 30 }, { code: 'NEW_DEVICE', score: 20 }]
   },
   {
-    displayName: 'Kim Minjun',
+    displayName: '김민준',
     phoneNumber: '010-1234-5678'
   }
 );
 
-assert.ok(prompt.includes('Kim Minjun'));
+assert.ok(prompt.includes('김민준'));
 assert.ok(!prompt.includes('CUST-001'));
-assert.ok(prompt.includes('press 1'));
-assert.ok(prompt.includes('press 2'));
+assert.ok(prompt.includes('본인 거래가 맞으면 1번'));
+assert.ok(prompt.includes('본인 거래가 아니면 2번'));
+assert.ok(prompt.includes('카드'));
+assert.ok(prompt.includes('온라인 결제 거래'));
+assert.ok(prompt.includes('고액 거래'));
+assert.ok(prompt.includes('새 기기 접속'));
 assert.ok(prompt.includes('010-****-5678'));
 assert.ok(!prompt.includes('010-1234-5678'));
 

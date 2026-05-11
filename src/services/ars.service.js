@@ -50,23 +50,85 @@ function verifyArsSecret(secret) {
 
 function formatReason(reason) {
   const score = Number(reason.score || 0);
-  return `${reason.code}${score ? ` +${score}` : ''}`;
+  const reasonLabels = {
+    HIGH_AMOUNT: '고액 거래',
+    NEW_DEVICE: '새 기기 접속',
+    UNUSUAL_LOCATION: '비정상 위치',
+    UNUSUAL_TIME: '비정상 시간',
+    RAPID_TRANSACTIONS: '짧은 시간 내 반복 거래',
+    FOREIGN_COUNTRY: '해외 거래',
+    HIGH_RISK_COUNTRY: '고위험 국가 거래',
+    NEW_RECIPIENT: '신규 수취인',
+    VELOCITY: '거래 빈도 이상',
+    IP_MISMATCH: '접속 정보 불일치',
+    DEVICE_MISMATCH: '기기 정보 불일치'
+  };
+  const label = reasonLabels[reason.code] || String(reason.code || '위험 패턴').replace(/_/g, ' ');
+  return `${label}${score ? `, 위험 점수 ${score}점` : ''}`;
+}
+
+function formatTransactionType(value) {
+  const typeLabels = {
+    DEPOSIT: '입금',
+    WITHDRAWAL: '출금',
+    TRANSFER: '이체',
+    PAYMENT: '결제'
+  };
+  return typeLabels[value] || value || '거래';
+}
+
+function formatPaymentMethod(value) {
+  const methodLabels = {
+    CARD: '카드',
+    ACCOUNT: '계좌',
+    TRANSFER: '계좌 이체',
+    BANK_TRANSFER: '계좌 이체',
+    'E-PAY': '간편결제',
+    EPAY: '간편결제',
+    CASH: '현금'
+  };
+  return methodLabels[value] || value || '확인되지 않은 방식';
+}
+
+function formatMerchantCategory(value) {
+  const categoryLabels = {
+    CAFE: '카페',
+    HOTEL: '호텔',
+    GROCERY: '마트',
+    ONLINE: '온라인 결제',
+    TRANSFER: '이체',
+    RESTAURANT: '음식점',
+    SHOPPING: '쇼핑',
+    TRANSPORT: '교통',
+    TRAVEL: '여행'
+  };
+  return categoryLabels[value] || value || null;
 }
 
 function buildArsPrompt(transaction, detection, arsIdentity = {}) {
-  const displayName = arsIdentity.displayName || 'customer';
+  const displayName = arsIdentity.displayName || transaction.customer_name || '고객님';
   const phoneNumber = arsIdentity.phoneNumber || null;
   const maskedPhone = maskPhoneNumber(phoneNumber);
   const reasons = Array.isArray(detection.reasons) ? detection.reasons : [];
   const reasonText = reasons.length
     ? reasons.slice(0, 3).map(formatReason).join(', ')
-    : 'risk pattern detected';
+    : '이상 거래 패턴';
+  const transactionType = formatTransactionType(transaction.type);
+  const paymentMethod = formatPaymentMethod(transaction.payment_method || transaction.type);
+  const merchantCategory = formatMerchantCategory(transaction.merchant_category);
+  const amount = Number(transaction.amount).toLocaleString('ko-KR');
+  const transactionDescription = merchantCategory
+    ? merchantCategory.includes(transactionType)
+      ? `${merchantCategory} 거래`
+      : `${merchantCategory} ${transactionType}`
+    : `${transactionType} 거래`;
 
   return [
-    `FDS anomaly alert for ${displayName}.`,
-    `Risk score ${detection.risk_score}, reason: ${reasonText}.`,
-    `Amount KRW ${Number(transaction.amount).toLocaleString('ko-KR')}, method ${transaction.payment_method || transaction.type}.`,
-    `Phone ${maskedPhone}. If this transaction is yours, press 1. If not, press 2.`
+    'RedFlag ARS 서비스입니다. 안녕하세요.',
+    `${displayName} 님의 계좌에서 ${amount}원의 ${paymentMethod} ${transactionDescription} 이상 거래가 감지되었습니다.`,
+    `위험 점수는 ${detection.risk_score}점이며, 감지 사유는 ${reasonText}입니다.`,
+    `등록된 연락처는 ${maskedPhone}입니다.`,
+    '본인 거래가 맞으면 1번을, 본인 거래가 아니면 2번을 눌러 주세요.'
   ].join(' ');
 }
 
