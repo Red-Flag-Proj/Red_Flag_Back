@@ -35,13 +35,15 @@ const prompt = buildArsPrompt(
 
 assert.ok(prompt.includes('김민준'));
 assert.ok(!prompt.includes('CUST-001'));
-assert.ok(prompt.includes('본인 거래가 맞으면 1번'));
-assert.ok(prompt.includes('본인 거래가 아니면 2번'));
-assert.ok(prompt.includes('카드'));
-assert.ok(prompt.includes('온라인 결제 거래'));
-assert.ok(prompt.includes('고액 거래'));
-assert.ok(prompt.includes('새 기기 접속'));
-assert.ok(prompt.includes('010-****-5678'));
+assert.ok(prompt.includes('1,500,000원의 이상 거래'));
+assert.ok(prompt.includes('위험 점수는 70점'));
+assert.ok(prompt.includes('본인 거래가 맞으면 일 번'));
+assert.ok(prompt.includes('본인 거래가 아니면 이 번'));
+assert.ok(!prompt.includes('카드'));
+assert.ok(!prompt.includes('온라인 결제 거래'));
+assert.ok(!prompt.includes('고액 거래'));
+assert.ok(!prompt.includes('새 기기 접속'));
+assert.ok(!prompt.includes('010-****-5678'));
 assert.ok(!prompt.includes('010-1234-5678'));
 
 console.log('ARS service test passed.');

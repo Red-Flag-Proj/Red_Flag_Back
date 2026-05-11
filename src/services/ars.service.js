@@ -125,10 +125,9 @@ function buildArsPrompt(transaction, detection, arsIdentity = {}) {
 
   return [
     'RedFlag ARS 서비스입니다. 안녕하세요.',
-    `${displayName} 님의 계좌에서 ${amount}원의 ${paymentMethod} ${transactionDescription} 이상 거래가 감지되었습니다.`,
-    `위험 점수는 ${detection.risk_score}점이며, 감지 사유는 ${reasonText}입니다.`,
-    `등록된 연락처는 ${maskedPhone}입니다.`,
-    '본인 거래가 맞으면 1번을, 본인 거래가 아니면 2번을 눌러 주세요.'
+    `${displayName} 님의 계좌에서 ${amount}원의 이상 거래가 감지되었습니다.`,
+    `위험 점수는 ${detection.risk_score}점입니다.`,
+    '본인 거래가 맞으면 일 번을, 본인 거래가 아니면 이 번을 눌러 주세요.'
   ].join(' ');
 }
 
